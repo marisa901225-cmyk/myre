@@ -21,6 +21,13 @@ const allowedOrigins = Array.from(
 const config = {
   port: process.env.PORT || 4000,
   dbPath: process.env.DB_PATH || path.join(__dirname, '..', 'data.db'),
+  attachmentStoragePath:
+    process.env.ATTACHMENT_STORAGE_PATH ||
+    path.join(__dirname, '..', 'attachments'),
+  attachmentMaxFileSize: toInt(
+    process.env.ATTACHMENT_MAX_FILE_SIZE,
+    25 * 1024 * 1024,
+  ),
   apiKey: process.env.API_KEY || process.env.ESTIMATE_TOOL_API_KEY || null,
   requireApiKey:
     String(process.env.REQUIRE_API_KEY || 'true').toLowerCase() !== 'false',

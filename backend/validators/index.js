@@ -1,6 +1,7 @@
 const { config } = require('../config');
 const { sendError } = require('../utils/http');
 const { isPlainObject } = require('../utils/isPlainObject');
+const { ALLOWED_ATTACHMENT_EXTENSIONS } = require('../utils/attachments');
 
 const {
   maxStringLength: MAX_STRING_LENGTH,
@@ -39,6 +40,65 @@ const requireStringField =
       return next();
     };
 
+const getAttachedFilesError = (attachedFiles) => {
+  if (attachedFiles === undefined) {
+    return null;
+  }
+  if (!Array.isArray(attachedFiles)) {
+    return '`attachedFiles` must be an array';
+  }
+  if (attachedFiles.length > MAX_ARRAY_LENGTH) {
+    return '`attachedFiles` is too large';
+  }
+
+  for (const file of attachedFiles) {
+    if (!isPlainObject(file)) {
+      return '`attachedFiles` items must be objects';
+    }
+
+    const { id, name, size, type, extension, addedAt } = file;
+    if (typeof id !== 'string' || id.length === 0) {
+      return '`attachedFiles[].id` must be a string';
+    }
+    if (id.length > MAX_STRING_LENGTH) {
+      return '`attachedFiles[].id` is too long';
+    }
+    if (typeof name !== 'string' || name.length === 0) {
+      return '`attachedFiles[].name` must be a string';
+    }
+    if (name.length > MAX_STRING_LENGTH) {
+      return '`attachedFiles[].name` is too long';
+    }
+    if (
+      typeof size !== 'number' ||
+      !Number.isFinite(size) ||
+      size < 0
+    ) {
+      return '`attachedFiles[].size` must be a non-negative number';
+    }
+    if (typeof type !== 'string') {
+      return '`attachedFiles[].type` must be a string';
+    }
+    if (type.length > MAX_STRING_LENGTH) {
+      return '`attachedFiles[].type` is too long';
+    }
+    if (
+      typeof extension !== 'string' ||
+      !ALLOWED_ATTACHMENT_EXTENSIONS.has(extension.toLowerCase())
+    ) {
+      return '`attachedFiles[].extension` is invalid';
+    }
+    if (typeof addedAt !== 'string') {
+      return '`attachedFiles[].addedAt` must be a string';
+    }
+    if (addedAt.length > MAX_STRING_LENGTH) {
+      return '`attachedFiles[].addedAt` is too long';
+    }
+  }
+
+  return null;
+};
+
 const validateProjectBody = (req, res, next) => {
   if (!isPlainObject(req.body)) {
     return sendError(res, 400, 'Body must be a JSON object');
@@ -54,6 +114,7 @@ const validateProjectBody = (req, res, next) => {
     createdAt,
     updatedAt,
     data,
+    attachedFiles,
   } = req.body;
 
   if (id !== undefined && typeof id !== 'string') {
@@ -91,6 +152,16 @@ const validateProjectBody = (req, res, next) => {
   }
   if (data !== undefined && !isPlainObject(data)) {
     return sendError(res, 400, '`data` must be an object');
+  }
+  const attachedFilesError = getAttachedFilesError(attachedFiles);
+  if (attachedFilesError) {
+    return sendError(res, 400, attachedFilesError);
+  }
+  const dataAttachedFilesError = getAttachedFilesError(
+    data && data.attachedFiles,
+  );
+  if (dataAttachedFilesError) {
+    return sendError(res, 400, dataAttachedFilesError);
   }
   if (createdAt !== undefined && typeof createdAt !== 'string') {
     return sendError(res, 400, '`createdAt` must be a string');
@@ -141,6 +212,42 @@ const validateBackupRestoreBody = (req, res, next) => {
   if (!projects.every((p) => isPlainObject(p))) {
     return sendError(res, 400, 'Invalid backup data');
   }
+  if (
+    !projects.every((p) => {
+      const directError = getAttachedFilesError(p.attachedFiles);
+      const dataError = getAttachedFilesError(
+        p.data && p.data.attachedFiles,
+      );
+      return !directError && !dataError;
+    })
+  ) {
+    return sendError(res, 400, 'Invalid attachment metadata');
+  }
+  return next();
+};
+
+const validateLedgerNameRenameBody = (req, res, next) => {
+  if (!isPlainObject(req.body)) {
+    return sendError(res, 400, 'Body must be a JSON object');
+  }
+
+  const { from, to, dryRun } = req.body;
+  if (typeof from !== 'string' || from.trim().length === 0) {
+    return sendError(res, 400, '`from` is required');
+  }
+  if (from.length > MAX_STRING_LENGTH) {
+    return sendError(res, 400, '`from` is too long');
+  }
+  if (typeof to !== 'string' || to.trim().length === 0) {
+    return sendError(res, 400, '`to` is required');
+  }
+  if (to.length > MAX_STRING_LENGTH) {
+    return sendError(res, 400, '`to` is too long');
+  }
+  if (dryRun !== undefined && typeof dryRun !== 'boolean') {
+    return sendError(res, 400, '`dryRun` must be a boolean');
+  }
+
   return next();
 };
 
@@ -150,4 +257,5 @@ module.exports = {
   validateProjectBody,
   validateMemoBody,
   validateBackupRestoreBody,
+  validateLedgerNameRenameBody,
 };

@@ -141,4 +141,21 @@ return 'https://marisa-server.tail5c2348.ts.net/estimate';
 3. 변경 사항 저장 및 배포 (GitHub Push)
 
 
-sudo systemctl restart switchgear-backend.service
+systemctl --user restart switchgear-backend.service
+
+---
+
+## 4. 프로젝트 첨부파일 보관
+
+첨부파일 API는 PDF와 압축파일(`.pdf`, `.zip`, `.7z`, `.rar`)만 받습니다.
+기본 저장 위치는 `backend/attachments`이며, 운영 환경에서는
+`ATTACHMENT_STORAGE_PATH`로 컨테이너/서비스 외부의 영속 볼륨을 지정하는 것을
+권장합니다.
+
+SQLite 백업과 `/api/backup/projects` 응답에는 `attachedFiles` 메타데이터만
+포함됩니다. 실제 바이너리 파일은 백업 JSON에 포함하지 않으므로, 서버 복구나
+NAS 이전 시 `ATTACHMENT_STORAGE_PATH` 폴더를 DB 파일과 함께 복사해야 합니다.
+
+`backend/send-db-email.js`가 생성해 Dropbox에 업로드하는 DB 백업은
+`data-YYYY-MM-DD.db.zip` 형식이며, ZIP 비밀번호는 백엔드 `API_KEY` 또는
+`ESTIMATE_TOOL_API_KEY` 값입니다.

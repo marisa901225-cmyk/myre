@@ -25,6 +25,8 @@ cp backend/.env.example backend/.env
 - `API_KEY` 또는 `ESTIMATE_TOOL_API_KEY`
 - `REQUIRE_API_KEY`
 - `DB_PATH` (선택)
+- `ATTACHMENT_STORAGE_PATH` (선택, 기본값 `backend/attachments`)
+- `ATTACHMENT_MAX_FILE_SIZE` (선택, 기본값 `26214400`)
 - `DROPBOX_APP_KEY`
 - `DROPBOX_APP_SECRET`
 - `DROPBOX_REFRESH_TOKEN`
@@ -60,9 +62,17 @@ DB/엑셀 메일 및 Dropbox 업로드 스크립트:
 npm --prefix backend run send-db-email
 ```
 
+DB 백업 파일은 `data-YYYY-MM-DD.db.zip` 형식으로 생성되며, ZIP 비밀번호는
+백엔드 `API_KEY` 또는 `ESTIMATE_TOOL_API_KEY` 값입니다.
+
 현재 Tailscale 백엔드 경로:
 
 - `https://marisa-server.tail5c2348.ts.net/estimate`
+
+프로젝트 첨부파일 바이너리는 SQLite 백업 JSON에 포함되지 않고
+`ATTACHMENT_STORAGE_PATH` 아래에 별도로 저장됩니다. DB 백업에는
+`attachedFiles` 메타데이터만 포함되므로, 복구/이전 시 첨부파일 폴더도
+함께 복사해야 합니다.
 
 자세한 복구 절차는 `BACKEND_RESTORE.md`를 참고하세요.
 

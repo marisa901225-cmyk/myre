@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 let Database;
 try {
@@ -84,6 +84,7 @@ const createExcelBackupFromDb = (dbPath, dateStr) => {
       소속대장: p.ledgerName || '',
       영업담당: p.salesRep || '',
       설계담당: p.manager || '',
+      계약방법: p.contractMethod || '',
       계약금액: p.contractAmount || 0,
       최종실행원가: p.finalCost || 0,
       생성일: p.createdAt ? String(p.createdAt).slice(0, 10) : '',
@@ -101,6 +102,7 @@ const createExcelBackupFromDb = (dbPath, dateStr) => {
             '소속대장',
             '영업담당',
             '설계담당',
+            '계약방법',
             '계약금액',
             '최종실행원가',
             '생성일',
@@ -181,8 +183,11 @@ function cleanupOldFiles(directory, daysToKeep = 14) {
 
   const files = fs.readdirSync(directory);
   files.forEach((file) => {
-    // data-*.db.gz 또는 프로젝트목록_*.xlsx 형식 확인
-    const isBackupFile = /^data-.*\.db\.gz$/.test(file) || /^프로젝트목록_.*\.xlsx$/.test(file);
+    // data-*.db.gz, data-*.db.zip 또는 프로젝트목록_*.xlsx 형식 확인
+    const isBackupFile =
+      /^data-.*\.db\.gz$/.test(file) ||
+      /^data-.*\.db\.zip$/.test(file) ||
+      /^프로젝트목록_.*\.xlsx$/.test(file);
     if (!isBackupFile) return;
 
     const filePath = path.join(directory, file);
@@ -197,6 +202,20 @@ function cleanupOldFiles(directory, daysToKeep = 14) {
     } catch (err) {
       console.error(`[cleanup] 파일 확인 실패 (${file}):`, err.message);
     }
+  });
+}
+
+function createPasswordProtectedZip(sourcePath, zipPath, password) {
+  if (!password) {
+    throw new Error('API_KEY 또는 ESTIMATE_TOOL_API_KEY가 없어 ZIP 비밀번호를 설정할 수 없습니다.');
+  }
+
+  if (fs.existsSync(zipPath)) {
+    fs.unlinkSync(zipPath);
+  }
+
+  execFileSync('zip', ['-j', '-q', '-P', password, zipPath, sourcePath], {
+    stdio: 'pipe',
   });
 }
 
@@ -217,6 +236,8 @@ async function main() {
     DROPBOX_APP_KEY,
     DROPBOX_APP_SECRET,
     DROPBOX_REFRESH_TOKEN,
+    API_KEY,
+    ESTIMATE_TOOL_API_KEY,
   } = process.env;
 
   // --- 옵션 스위치 ---
@@ -235,19 +256,24 @@ async function main() {
   // 1) Safe DB Backup & Compress
   const backupDbName = `data-${dateStr}.db`;
   const backupDbPath = path.join(__dirname, backupDbName);
-  const compressedDbPath = `${backupDbPath}.gz`;
+  const compressedDbPath = `${backupDbPath}.zip`;
+  const backupZipPassword = API_KEY || ESTIMATE_TOOL_API_KEY;
 
   try {
-    console.log('[send-db-email] DB 백업 및 압축 시작...');
+    console.log('[send-db-email] DB 백업 및 암호화 ZIP 압축 시작...');
     const db = new Database(dbPath);
     await db.backup(backupDbPath);
     db.close();
 
-    // gzip -f로 덮어쓰기
-    execSync(`gzip -f "${backupDbPath}"`);
-    console.log('[send-db-email] DB 압축 완료:', path.basename(compressedDbPath));
+    createPasswordProtectedZip(
+      backupDbPath,
+      compressedDbPath,
+      backupZipPassword,
+    );
+    fs.unlinkSync(backupDbPath);
+    console.log('[send-db-email] DB 암호화 ZIP 압축 완료:', path.basename(compressedDbPath));
   } catch (e) {
-    console.error('[send-db-email] DB 백업/압축 실패:', e);
+    console.error('[send-db-email] DB 백업/암호화 ZIP 압축 실패:', e);
     // 스냅샷/압축이 없으면 작업 실패로 표시
     if (!fs.existsSync(compressedDbPath) && !fs.existsSync(backupDbPath)) {
       process.exitCode = 1;
@@ -260,7 +286,7 @@ async function main() {
     : (fs.existsSync(backupDbPath) ? backupDbPath : dbPath);
 
   const dbArtifactName = fs.existsSync(compressedDbPath)
-    ? `data-${dateStr}.db.gz`
+    ? `data-${dateStr}.db.zip`
     : (fs.existsSync(backupDbPath) ? `data-${dateStr}.db` : 'data.db');
 
   // 2) Excel Generation (옵션)
@@ -302,7 +328,9 @@ async function main() {
         '스위치기어 견적관리 툴의 백업 보고서입니다.\n\n' +
         `보낸 시각(KST): ${now.toLocaleString('ko-KR')}\n` +
         (excelPath ? `엑셀 파일: ${path.basename(excelPath)} (첨부됨)\n` : '') +
+        `DB 백업 파일: ${dbArtifactName}\n` +
         `DB 백업 폴더: ${dbSharedLink}\n` +
+        'DB 백업 ZIP 비밀번호: 백엔드 API 키 값\n' +
         '\n첨부된 엑셀 파일을 확인해 주세요. DB 파일은 위 드롭박스 공유 폴더 링크를 통해 접근 가능합니다.\n';
 
       const info = await transporter.sendMail({
