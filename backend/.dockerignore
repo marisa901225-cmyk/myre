@@ -1,0 +1,8 @@
+node_modules
+npm-debug.log*
+.env
+*.log
+*.xlsx
+*.gz
+data.db
+db.json

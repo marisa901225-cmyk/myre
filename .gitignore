@@ -36,8 +36,12 @@ desktop.ini
 # Vercel
 .vercel
 
-# Backend (별도 repo)
-backend/
+# Backend
+backend/node_modules/
+backend/data.db
+backend/*.log
+backend/*.xlsx
+backend-data/
 
 # Backup files
 *.backup.js

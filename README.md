@@ -1,210 +1,127 @@
-\[필독] 배전반 앱 설치 및 인터넷 게시 가이드
+# Switchgear Estimate Backend Archive
 
-대상: 컴퓨터 비전공자, 관리자 목표: 복잡한 설정 없이 클릭과 엔터만으로 앱 실행 및 배포
+이 저장소는 스위치기어 견적관리 시스템의 백엔드 보관/복구용 작업본입니다.
+운영 프론트엔드는 다른 PC에서 관리하며, 이 저장소에는 포함하지 않습니다.
 
+## Included
 
+- `backend/`: Express + SQLite 백엔드
+- `BACKEND_RESTORE.md`: 복구 메모와 배포/연결 절차
 
-0\. 가장 중요한 준비물 (필수)
+## Requirements
 
-❗ 시작하기 전에 이 2가지만 먼저 확인해 주세요.
+- Node.js LTS
+- npm
 
+## Setup
 
+```bash
+npm --prefix backend install
+cp backend/.env.example backend/.env
+```
 
-압축 풀기 (가장 많이 실수하는 부분)
+필수/주요 환경변수:
 
+- `API_KEY` 또는 `ESTIMATE_TOOL_API_KEY`
+- `REQUIRE_API_KEY`
+- `DB_PATH` (선택)
+- `DROPBOX_APP_KEY`
+- `DROPBOX_APP_SECRET`
+- `DROPBOX_REFRESH_TOKEN`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `MAIL_FROM`
+- `MAIL_TO`
 
+## Run
 
-다운로드 받은 파일이 지퍼 달린 폴더(ZIP)라면, 마우스 우클릭 후 \*\*\[모두 압축 풀기]\*\*를 꼭 해야 합니다.
+```bash
+node backend/server.js
+```
 
+기본 헬스체크:
 
+- `GET /api/health`
+- `GET /estimate`
 
-압축을 풀지 않고 실행하면 절대 작동하지 않습니다.
+## Test
 
+```bash
+npm --prefix backend test
+```
 
+## Backup
 
-계정 준비
+DB/엑셀 메일 및 Dropbox 업로드 스크립트:
 
+```bash
+npm --prefix backend run send-db-email
+```
 
+현재 Tailscale 백엔드 경로:
 
-Google 계정 (지메일) 아이디와 비밀번호를 미리 준비해 주세요. (가장 쉽고 빠른 로그인을 위함입니다.)
+- `https://marisa-server.tail5c2348.ts.net/estimate`
 
+자세한 복구 절차는 `BACKEND_RESTORE.md`를 참고하세요.
 
+## Docker / NAS Deploy
 
-1단계: 프로그램 설치 (딱 1개만 설치)
+NAS에서 Docker로 운영할 때는 SQLite 파일을 컨테이너 밖 볼륨에 두는 방식이 가장 무난합니다.
 
-컴퓨터가 앱을 읽을 수 있게 해주는 'Node.js'라는 프로그램을 설치합니다.
+```bash
+mkdir -p backend-data
+cp backend/data.db backend-data/data.db
+docker compose up -d --build
+```
 
+자세한 절차는 `NAS_DOCKER_DEPLOY.md`를 참고하세요.
 
+## Company NAS Migration Checklist
 
-인터넷 주소창에 https://nodejs.org 입력 후 접속.
+회사 NAS로 옮길 때는 코드와 실제 운영 데이터를 분리해서 옮기면 됩니다.
 
+GitHub에 올릴 것:
 
+- 백엔드 소스코드
+- `backend/Dockerfile`
+- `docker-compose.yml`
+- 문서 파일들
 
-화면 왼쪽에 있는 \[LTS] 버튼 클릭 (다운로드됨).
+USB로 들고갈 것:
 
+- `backend/data.db`
+- `backend/.env`
 
+주의:
 
-다운로드된 파일을 실행하고, 계속 \[Next] 버튼만 누르면 설치 끝.
+- `backend/.env` 와 실제 DB 파일은 GitHub에 올리지 않습니다.
+- Docker 배포 기준 실제 운영 DB 위치는 `backend-data/data.db` 입니다.
 
+### NAS에서 옮기는 순서
 
+1. GitHub에서 프로젝트를 내려받습니다.
+2. 프로젝트 루트에서 DB 폴더를 만듭니다.
+3. USB에 있는 DB와 `.env` 를 제자리에 복사합니다.
+4. Docker Compose로 백엔드를 실행합니다.
+5. 브라우저에서 헬스체크 주소로 확인합니다.
 
-2단계: 검은색 창(명령어 입력창) 열기
+```bash
+mkdir -p backend-data
+cp /USB경로/data.db backend-data/data.db
+cp /USB경로/.env backend/.env
+docker compose up -d --build
+```
 
-이제 앱이 들어있는 폴더에서 명령을 내릴 창을 엽니다.
+실행 확인:
 
+```bash
+docker compose ps
+docker compose logs -f backend
+```
 
+접속 확인:
 
-압축을 푼 폴더 안으로 들어갑니다. (파일 목록에 package.json이라는 파일이 보여야 '정상'입니다.)
-
-
-
-폴더 맨 위쪽 \*\*'주소창(내 PC > 다운로드 > ... 라고 적힌 곳)'\*\*을 마우스로 한 번 클릭합니다.
-
-
-
-파란색으로 주소가 선택되면, 키보드로 cmd 라고 입력하고 \[Enter] 키를 칩니다.
-
-
-
-새카만 창(터미널)이 뜨면 성공입니다.
-
-
-
-3단계: 부품 조립하기 (처음 1번만)
-
-새카만 창에 아래 영어를 \*\*똑같이 입력(복사+붙여넣기)\*\*하고 엔터를 치세요.
-
-
-
-입력할 명령어:
-
-
-
-Bash
-
-
-
-npm install
-
-\[Enter] 키를 누르세요.
-
-
-
-⏳ 주의: 글자가 막 움직이다가 멈춘 것처럼 보일 수 있습니다. 다시 입력창이 나올 때까지 커피 한 모금 하시면서 끝까지 기다려주세요.
-
-
-
-4단계: 내 컴퓨터에서 미리보기
-
-잘 설치됐는지 확인하는 단계입니다.
-
-
-
-입력할 명령어:
-
-
-
-Bash
-
-
-
-npm start
-
-\[Enter] 키를 누르세요.
-
-
-
-잠시 후 인터넷 창이 자동으로 열리면서 앱 화면이 나옵니다.
-
-
-
-확인하셨으면, 인터넷 창을 닫고 검은색 창에서 \[Ctrl]키와 \[C]키를 동시에 눌러 종료합니다.
-
-
-
-5단계: 전 세계에 공개하기 (인터넷 주소 만들기)
-
-이제 남들도 볼 수 있게 인터넷에 올립니다.
-
-
-
-1\. 올리기 도구 실행 검은색 창에 아래 명령어를 입력하세요.
-
-
-
-Bash
-
-
-
-npx vercel
-
-(중간에 y/N 같은 질문이 나오면 무조건 y를 입력하고 엔터를 치세요)
-
-
-
-2\. 로그인 (처음 1번만)
-
-
-
-화면에 Log in to Vercel? 이라고 나오면 엔터를 칩니다.
-
-
-
-인터넷 창이 열리면 \*\*\[Continue with Google]\*\*을 클릭하여 구글 아이디로 로그인합니다.
-
-
-
-"Login Successful"이 뜨면 인터넷 창을 닫고 다시 검은색 창으로 돌아오세요.
-
-
-
-3\. 설정 마무리 (중요) 검은색 창에서 질문이 여러 개 나오는데, 고민하지 말고 계속 \[Enter] 키만 치세요. (약 4~5번)
-
-
-
-Set up and deploy? -> \[Enter]
-
-
-
-Which scope? -> \[Enter]
-
-
-
-Link to existing project? -> \[Enter]
-
-
-
-Project name? -> \[Enter]
-
-
-
-In which directory? -> \[Enter]
-
-
-
-4\. 완료 확인
-
-
-
-마지막에 Production: https://...vercel.app 같은 주소가 나오면 성공입니다!
-
-
-
-그 주소를 복사해서 카톡으로 보내거나 즐겨찾기 해두시면 됩니다.
-
-
-
-※ 나중에 수정하고 싶을 땐?
-
-내용을 고치고 나서 검은색 창을 열고 딱 한 줄만 입력하세요.
-
-
-
-Bash
-
-
-
-npx vercel --prod
-
-이것만 입력하면 수정된 내용이 인터넷에 자동으로 반영됩니다.
-
+- `http://NAS_IP:4000/api/health`
+- `http://NAS_IP:4000/estimate`
